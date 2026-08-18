@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Neon Road Rush</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#050816;color:#fff;font-family:Arial,sans-serif;overflow:hidden}
+#app{width:100%;height:100vh;max-width:520px;margin:auto;position:relative;background:linear-gradient(#090d25,#02040c)}
+canvas{width:100%;height:100%;display:block}
+.panel{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:rgba(3,6,18,.72);backdrop-filter:blur(5px);padding:25px}
+h1{font-size:48px;margin:0;color:#27eaff;text-shadow:0 0 20px #00aaff,4px 4px 0 #8b00ff}
+h2{margin:8px 0 25px;color:#ffd43b}
+button{border:0;border-radius:18px;padding:15px 42px;font-size:21px;font-weight:900;color:#07101c;background:#27eaff;box-shadow:0 5px 0 #087e9a;margin:7px;min-width:210px}
+button:active{transform:translateY(3px);box-shadow:0 2px 0 #087e9a}
+small{opacity:.8;line-height:1.6}
+.hud{position:absolute;top:0;left:0;right:0;padding:12px;display:flex;justify-content:space-between;z-index:3;font-weight:bold}
+.badge{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.2);padding:8px 12px;border-radius:20px}
+#controls{position:absolute;bottom:18px;left:0;right:0;display:flex;justify-content:space-between;padding:0 22px;z-index:4}
+.ctrl{width:76px;height:58px;min-width:0;padding:0;border-radius:16px;background:rgba(39,234,255,.22);color:white;border:1px solid #27eaff;box-shadow:none;font-size:28px}
+.hidden{display:none!important}
+.result{font-size:28px;margin:12px}.gold{color:#ffd43b}
+</style>
+</head>
+<body>
+<div id="app">
+<canvas id="game"></canvas>
+<div class="hud"><span class="badge">⭐ <span id="score">0</span></span><span class="badge">🪙 <span id="coins">0</span></span><span class="badge">🏆 <span id="best">0</span></span></div>
+<div id="controls"><button class="ctrl" id="left">◀</button><button class="ctrl" id="right">▶</button></div>
+<div id="menu" class="panel">
+<h1>NEON<br>ROAD RUSH</h1><h2>DODGE • COLLECT • SURVIVE</h2>
+<button id="start">🚗 START GAME</button>
+<small>Move left/right • Collect coins • Dodge traffic<br>Speed increases as you survive!</small>
+</div>
+<div id="over" class="panel hidden">
+<h1>GAME OVER</h1>
+<div class="result">Score: <b id="finalScore">0</b></div>
+<div class="result gold">🪙 Coins: <b id="finalCoins">0</b></div>
+<button id="again">🔥 PLAY AGAIN</button>
+<button id="home">🏠 HOME</button>
+</div>
+</div>
+<script>
+const c=document.getElementById('game'),ctx=c.getContext('2d'),app=document.getElementById('app');
+const menu=document.getElementById('menu'),over=document.getElementById('over'),scoreEl=document.getElementById('score'),coinsEl=document.getElementById('coins'),bestEl=document.getElementById('best');
+let W,H,dpr,roadX,roadW,player,items=[],score=0,coins=0,best=+localStorage.neonBest||0,running=false,last=0,spawn=0,coinSpawn=0,speed=5,keys={left:false,right:false};
+bestEl.textContent=best;
+function resize(){dpr=devicePixelRatio||1;W=app.clientWidth;H=app.clientHeight;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);roadW=Math.min(W*.78,390);roadX=(W-roadW)/2;if(player)player.y=H-125}
+addEventListener('resize',resize);resize();
+function reset(){score=0;coins=0;speed=5;items=[];player={x:W/2,y:H-125,w:38,h:66};scoreEl.textContent=0;coinsEl.textContent=0}
+function start(){reset();menu.classList.add('hidden');over.classList.add('hidden');running=true;last=performance.now();requestAnimationFrame(loop)}
+function end(){running=false;finalScore.textContent=Math.floor(score);finalCoins.textContent=coins;if(score>best){best=Math.floor(score);localStorage.neonBest=best}bestEl.textContent=best;over.classList.remove('hidden')}
+function addItem(type){let lane=Math.floor(Math.random()*3),laneW=roadW/3;items.push({type,lane,x:roadX+laneW*lane+laneW/2,y:-80,w:type==='coin'?28:40,h:type==='coin'?28:65})}
+function drawRoad(t){ctx.fillStyle='#050816';ctx.fillRect(0,0,W,H);ctx.fillStyle='#11182c';ctx.fillRect(roadX,0,roadW,H);ctx.strokeStyle='#27eaff';ctx.lineWidth=3;ctx.strokeRect(roadX,0,roadW,H);ctx.setLineDash([35,28]);ctx.lineWidth=4;ctx.strokeStyle='rgba(255,255,255,.35)';for(let i=1;i<3;i++){let x=roadX+roadW*i/3;ctx.beginPath();ctx.moveTo(x,(t%63)-63);ctx.lineTo(x,H);ctx.stroke()}ctx.setLineDash([])}
+function car(x,y,color){ctx.save();ctx.translate(x,y);ctx.fillStyle=color;ctx.shadowBlur=18;ctx.shadowColor=color;ctx.beginPath();ctx.roundRect(-20,-33,40,66,10);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#b9f6ff';ctx.fillRect(-14,-20,28,17);ctx.fillStyle='#06101c';ctx.fillRect(-18,24,7,13);ctx.fillRect(11,24,7,13);ctx.restore()}
+function loop(now){if(!running)return;let dt=Math.min(32,now-last);last=now;speed+=dt*.00018;score+=dt*.02*speed;spawn+=dt;coinSpawn+=dt;if(spawn>Math.max(380,850-speed*45)){spawn=0;addItem('enemy')}if(coinSpawn>700){coinSpawn=0;addItem('coin')}let move=(keys.right?1:0)-(keys.left?1:0);player.x+=move*dt*.38;let min=roadX+roadW/6,max=roadX+roadW-roadW/6;player.x=Math.max(min,Math.min(max,player.x));for(let i=items.length-1;i>=0;i--){let o=items[i];o.y+=dt*.19*speed;if(Math.abs(o.x-player.x)<(o.w+player.w)/2&&Math.abs(o.y-player.y)<(o.h+player.h)/2){if(o.type==='coin'){coins++;score+=50;coinsEl.textContent=coins;items.splice(i,1);continue}else{end();return}}if(o.y>H+100)items.splice(i,1)}drawRoad(now*.25);items.forEach(o=>o.type==='coin'?drawCoin(o.x,o.y):car(o.x,o.y,'#ff3b6b'));car(player.x,player.y,'#27eaff');scoreEl.textContent=Math.floor(score);requestAnimationFrame(loop)}
+function drawCoin(x,y){ctx.save();ctx.translate(x,y);ctx.fillStyle='#ffd43b';ctx.shadowBlur=18;ctx.shadowColor='#ffd43b';ctx.beginPath();ctx.arc(0,0,15,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#8b5a00';ctx.font='bold 17px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,1);ctx.restore()}
+function bind(el,dir){el.onpointerdown=()=>keys[dir]=true;el.onpointerup=()=>keys[dir]=false;el.onpointercancel=()=>keys[dir]=false;el.onpointerleave=()=>keys[dir]=false}
+bind(document.getElementById('left'),'left');bind(document.getElementById('right'),'right');
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft')keys.left=true;if(e.key==='ArrowRight')keys.right=true});addEventListener('keyup',e=>{if(e.key==='ArrowLeft')keys.left=false;if(e.key==='ArrowRight')keys.right=false});
+document.getElementById('start').onclick=start;document.getElementById('again').onclick=start;document.getElementById('home').onclick=()=>{over.classList.add('hidden');menu.classList.remove('hidden')};
+</script>
+</body>
+</html>
